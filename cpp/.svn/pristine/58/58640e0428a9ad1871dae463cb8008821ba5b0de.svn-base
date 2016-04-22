@@ -1,0 +1,5 @@
+jdbcUrl = jdbc:sqlserver://192.168.10.22:1433;DatabaseName=ksoa
+user = root
+password = 123456
+driverClass = com.microsoft.sqlserver.jdbc.SQLServerDriver
+devMode = true

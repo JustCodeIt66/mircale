@@ -1,0 +1,197 @@
+package com.cpp.order;
+
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+
+import com.cpp.common.DaoUtility;
+import com.cpp.common.MyInterceptor;
+import com.cpp.login.User;
+import com.cpp.pharmaceutical.Pharmaceutical;
+import com.cpp.pharmaceutical.PharmaceuticalSearch;
+import com.jfinal.aop.Before;
+import com.jfinal.core.Controller;
+import com.jfinal.kit.JsonKit;
+import com.jfinal.plugin.activerecord.Record;
+import com.jfinal.plugin.ehcache.CacheKit;
+
+/**
+ * OrderController
+ * 所有 sql 与业务逻辑写在 Model 或 Service 中，不要写在 Controller 中，养成好习惯，有利于大型项目的开发与维护
+ */
+@Before(MyInterceptor.class)
+public class OrderAddController extends Controller {
+	
+	private PharmaceuticalSearch sqlPara = new PharmaceuticalSearch();
+
+	public void index() {
+
+		User loginUser = CacheKit.get("UserCachingFilter", "user");
+		if(null != loginUser ){
+			Record mainOrder = new Record();
+			mainOrder.set("dwmch", loginUser.getStr("dwmch"));
+			mainOrder.set("shdz", loginUser.getStr("shdz"));
+			mainOrder.set("dwbh", loginUser.getStr("DWBH"));
+			setAttr("dwmch",loginUser.getStr("dwmch"));
+			setAttr("mainOrder",mainOrder);
+			setAttr("headerUserName", loginUser.get("NAME"));
+		}
+		setAttr("fkfsList",DaoUtility.getfkfs());
+		setAttr("thfsList",DaoUtility.getthfs());
+		setAttr("ysyfList",DaoUtility.getysyf());
+
+	    render("orderAdd.jsp");
+	}
+	
+	public void save() {	
+
+	   String djbh = DaoUtility.MakeNewOrderID();
+	   //主表信息
+	   Order orderMain= getModel(Order.class,"mainOrder");
+	   orderMain.set("djbh", djbh);
+	   orderMain.set("djbs", "XSG");
+	   //orderMain.set("rq", ""); //页面获取
+	   orderMain.set("djlx", "212");
+	   orderMain.set("bendian", "ZDA");
+	   
+	   //dwbh
+	   orderMain.set("bezzs", "是");
+	   orderMain.set("kaiprq", orderMain.get("rq"));
+	   orderMain.set("ontime", new SimpleDateFormat("HH:mm:ss").format(new Date()));
+	   orderMain.set("piaohao", "");//
+	   orderMain.set("bm", "销售部");
+	   orderMain.set("ywy", "");//
+	   orderMain.set("username", "");//
+	   orderMain.set("kpman", "");//
+	   orderMain.set("is_yckp", "否");//
+	   orderMain.set("yishj", "否");//
+	   orderMain.set("zhy", "销售开票单");//
+	   //beizhu
+	   orderMain.set("maolv", "0.000");//
+	   orderMain.set("is_kp", "否");//
+       //fkfs   thfs   is_xjh use_ysyf  shdz
+	   orderMain.set("kfpfs", "不开发票");//
+	   orderMain.set("shenhe", "否");//
+	   orderMain.set("sjjsdj", "0.00");// 
+
+	   orderMain.save();
+	   //细表数量
+	   String[]  table_sl1 = getParaValues("table_sl1");//整包数量
+	   String[]  table_sl2 = getParaValues("table_sl2");//零散数量
+	   //细表商品编号
+	   String[] table_spbh = getParaValues("table_spbh");
+	   //细表金额
+	//   String[] table_je = getParaValues("table_je");
+	   //完善细表信息
+
+	   for(int i=0;i<table_spbh.length;i++){
+		   Pharmaceutical tmp = Pharmaceutical.me.find( "select * "," spbh = '"+table_spbh[i]+"'").get(0);
+		   String tmp_sl1= "0";
+		   String tmp_sl2= "0";
+		   if(null !=table_sl1  && !"".equals(table_sl1[i])){
+			   tmp_sl1 = table_sl1[i];
+		   }
+		   if(null !=table_sl2  && !"".equals(table_sl2[i])){
+			   tmp_sl2 = table_sl2[i];
+		   }
+		   makeOrderDetail(tmp,djbh,String.valueOf((i+1)),tmp_sl1,tmp_sl2).save();  
+	   }
+	   redirect("/order");
+	}
+	
+
+	public void  queryPharmaceutical() {
+
+		String sqlCondition = " 1=1 and spmch not like '%待填%' and spmch not like '%淘汰%' and beactive='是' ";
+        String spbh = getPara("Search_spbh");
+        String spmch =  getPara("Search_spmch");
+        String zjm =  getPara("Search_zjm");
+        if( null!=spbh && !spbh.isEmpty() && !spbh.equals("")){
+        	sqlCondition = sqlCondition+ " and  spbh like " +"'%" +spbh +"%'"; 
+        }
+        if( null!=spmch &&  !spmch.isEmpty() && !spmch.equals("")){
+        	sqlCondition = sqlCondition+ "and  spmch like " +"'%" +spmch +"%'"; 
+        }
+        if( null!=zjm &&  !zjm.isEmpty() && !zjm.equals("")){
+        	sqlCondition = sqlCondition+ "and  zjm like " +"'%" +zjm +"%'"; 
+        }
+        List<Pharmaceutical>  list = new ArrayList<Pharmaceutical>();
+        if("".equals(spbh) &&  "".equals(spmch) &&  "".equals(zjm) ){
+        	   renderHtml("");
+        }else{
+            list =   Pharmaceutical.me.find( "select * ",sqlCondition);   
+            renderHtml(JsonKit.toJson(list));
+        }
+     
+	}
+	
+	
+	public OrderDetail makeOrderDetail(Pharmaceutical pharmaceutical,String djbh,String dj_sort,String baozhshl,String lingsshl){
+		
+		double shl = 0.00;
+		double je = 0.00;
+		double hsje = 0.00;
+		double lshje = 0.00;
+		OrderDetail result = new OrderDetail();
+		result.set("djbh", djbh);
+		result.set("dj_sn", dj_sort);
+		result.set("dj_sort", dj_sort);
+		result.set("spid", pharmaceutical.get("spid"));
+		result.set("recnum", "0");
+		result.set("dw", pharmaceutical.get("dw"));
+		result.set("jlgg", pharmaceutical.get("jlgg"));
+		result.set("pihao", "");
+		result.set("baozhiqi", "");//如何计算
+		result.set("hw","");//
+
+		if(!"".equals(baozhshl)&& !"0".equals(baozhshl)){
+			shl = ((Integer.parseInt(baozhshl)) * ( Double.parseDouble(String.valueOf(pharmaceutical.get("jlgg")))));
+			result.set("baozhshl",baozhshl);			
+			result.set("shl",  ((Integer.parseInt(baozhshl)) * ( Double.parseDouble(String.valueOf(pharmaceutical.get("jlgg"))))));
+			result.set("lingsshl","0");		
+		}
+		if(!"".equals(lingsshl) && !"0".equals(lingsshl)){
+			shl =  Double.parseDouble(lingsshl) ;
+			result.set("baozhshl","0");		
+			result.set("lingsshl",lingsshl);			
+			result.set("shl",lingsshl );
+		}
+		
+	//	result.set("dj", pharmaceutical.get("shj"));
+	//	result.set("hshj", pharmaceutical.get("hshsj"));
+		
+		result.set("dj", "0.00");
+		result.set("hshj", "0.00");
+		
+//        je = shl*Double.parseDouble(String.valueOf(pharmaceutical.get("shj")));
+//        hsje = shl*Double.parseDouble(String.valueOf(pharmaceutical.get("hshsj")));
+//        lshje= shl*Double.parseDouble(String.valueOf(pharmaceutical.get("lshj")));
+//		result.set("je", je);
+//		result.set("hsje", hsje);
+//		result.set("shlv", pharmaceutical.get("shlv"));
+//		result.set("she", pharmaceutical.get("she"));
+
+		result.set("je", "0.00");
+		result.set("hsje", "0.00");
+		result.set("shlv", pharmaceutical.get("shlv"));
+		result.set("she", pharmaceutical.get("she"));
+		
+//		result.set("lshj", pharmaceutical.get("lshj"));
+//		result.set("lshje", lshje);
+		result.set("lshj", "0.00");
+		result.set("lshje", "0.00");
+		
+		result.set("chbdj", "0.00");
+		result.set("sxrq", "");
+		
+		result.set("sxrq", "");
+		
+		result.set("zengp", "否");
+		result.set("zdshj", "0.00");
+		result.set("xjml", "0.00");
+		result.set("ml", "0.00");
+		return result;
+	}
+}
+

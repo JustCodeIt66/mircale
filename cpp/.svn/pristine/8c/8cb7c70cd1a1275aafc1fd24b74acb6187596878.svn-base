@@ -1,0 +1,43 @@
+package com.cpp.common;
+
+import com.jfinal.plugin.activerecord.dialect.AnsiSqlDialect;
+
+public class MyAnsiSqlDialect  extends AnsiSqlDialect   {
+       @Override    
+	   public void forPaginate(StringBuilder sql, int pageNumber, int pageSize,   String select, String sqlExceptSelect) { 
+		   System.out.println("-------MyAnsiSqlDialect.forPaginate--------------------------------");    
+		   int notInPageNum = (pageNumber-1)*pageSize;    
+		   String selectContent = select.substring(select.indexOf("select")+6, select.length());
+		   String sqlExceptSelectTmp ="";
+		   String orderID="";
+		   if(sqlExceptSelect.contains("order")){
+			   
+			   orderID = sqlExceptSelect.substring(sqlExceptSelect.indexOf("by")+2,sqlExceptSelect.length());
+			   sqlExceptSelectTmp = sqlExceptSelect.substring(0,sqlExceptSelect.indexOf("order"));
+		   }
+		   if(sqlExceptSelect.contains("where")){
+			   sql.append(" select top ").append(pageSize).append("  ").append(selectContent).append(" ");        
+			   sql.append(sqlExceptSelectTmp).append(" and ").append( orderID ).append(" not in (");        
+			   sql.append("select top ").append(notInPageNum).append(" ").append(  orderID ).append(" ").append(sqlExceptSelect).append(" desc");        
+			   sql.append(") order by ").append(orderID).append(" desc");    
+		   }else{
+			   sql.append(" select top ").append(pageSize).append("  ").append(selectContent).append(" ");       
+			   sql.append(sqlExceptSelectTmp).append(" where ").append(orderID).append(" not in (");        
+			   sql.append("select top ").append(notInPageNum).append("  ").append(orderID).append(" ").append(sqlExceptSelect).append(" desc");        
+			   sql.append(") order by ").append(orderID).append(" desc");    ;     
+		   }
+		    
+		   System.out.println("--------------- 拼接后的分页语句 ---------------------------");        
+		   System.out.println(sql);      
+       }
+	   
+	    @Override    
+	    public boolean isTakeOverDbPaginate() {        
+	    	return false;    
+	    }     
+	    @Override    
+	    public boolean isTakeOverModelPaginate() 
+	    {       
+	    	return false;   
+	    	}
+}

@@ -1,0 +1,116 @@
+package com.cpp.order;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import com.cpp.common.DaoUtility;
+import com.cpp.common.MyInterceptor;
+import com.cpp.pharmaceutical.Pharmaceutical;
+import com.cpp.pharmaceutical.PharmaceuticalSearch;
+import com.jfinal.aop.Before;
+import com.jfinal.core.Controller;
+import com.jfinal.kit.JsonKit;
+
+/**
+ * OrderController
+ * 所有 sql 与业务逻辑写在 Model 或 Service 中，不要写在 Controller 中，养成好习惯，有利于大型项目的开发与维护
+ */
+@Before(MyInterceptor.class)
+public class OrderAddController extends Controller {
+	
+	private PharmaceuticalSearch sqlPara = new PharmaceuticalSearch();
+
+	public void index() {
+
+	     render("orderAdd.jsp");
+	}
+	
+	public void save() {	
+
+	   String djbh = DaoUtility.MakeNewOrderID();
+	   //主表信息
+	   Order orderMain= getModel(Order.class,"mainOrder");
+	   orderMain.set("djbh", djbh);
+	   orderMain.set("djbs", "JHF");
+	   //orderMain.set("rq", ""); //页面获取
+	   orderMain.set("dwbh", ""); 
+	   orderMain.set("djlx", "110");
+	   orderMain.set("kaiprq", "");
+	   orderMain.set("ontime", "");
+	   orderMain.set("ydhrq", "");
+	   orderMain.set("bm", "采购部");
+	   orderMain.set("ywy", "");
+	   orderMain.set("username", "");
+	   orderMain.set("bezzs", "是");
+	   orderMain.set("bendian", "ZDA");
+	   orderMain.set("dfywy", "");
+	   orderMain.set("dfywyid", "");
+	   orderMain.save();
+	   //细表数量
+	   String[]  table_sl = getParaValues("table_sl");
+	   //细表商品编号
+	   String[] table_spbh = getParaValues("table_spbh");
+	   //细表金额
+	   String[] table_je = getParaValues("table_je");
+	   //完善细表信息
+	   List table_details= new ArrayList<OrderDetail>();
+	   for(int i=0;i<table_spbh.length;i++){
+		   Pharmaceutical tmp = Pharmaceutical.me.find( "select * "," spbh = '"+table_spbh[i]+"'").get(0);
+		   makeOrderDetail(tmp,djbh,String.valueOf((i+1)),table_je[i],table_sl[i]).save();
+	   }
+	   redirect("/order");
+	}
+	
+
+	public void  queryPharmaceutical() {
+
+		String sqlCondition = " 1=1 and spmch not like '%待填%' and spmch not like '%淘汰%' ";
+        String spbh = getPara("Search_spbh");
+        String spmch =  getPara("Search_spmch");
+        String zjm =  getPara("Search_zjm");
+        if( null!=spbh && !spbh.isEmpty() && !spbh.equals("")){
+        	sqlCondition = sqlCondition+ " and  spbh like " +"'%" +spbh +"%'"; 
+        }
+        if( null!=spmch &&  !spmch.isEmpty() && !spmch.equals("")){
+        	sqlCondition = sqlCondition+ "and  spmch like " +"'%" +spmch +"%'"; 
+        }
+        if( null!=zjm &&  !zjm.isEmpty() && !zjm.equals("")){
+        	sqlCondition = sqlCondition+ "and  zjm like " +"'%" +zjm +"%'"; 
+        }
+        List<Pharmaceutical>  list = new ArrayList<Pharmaceutical>();
+        if("".equals(spbh) &&  "".equals(spmch) &&  "".equals(zjm) ){
+        	   renderHtml("");
+        }else{
+            list =   Pharmaceutical.me.find( "select * ",sqlCondition);   
+            renderHtml(JsonKit.toJson(list));
+        }
+     
+	}
+	
+	
+	public OrderDetail makeOrderDetail(Pharmaceutical pharmaceutical,String djbh,String dj_sort,String je,String sl){
+		OrderDetail result = new OrderDetail();
+		result.set("djbh", djbh);
+		result.set("dj_sn", dj_sort);
+		result.set("dj_sort", dj_sort);
+		result.set("spid", pharmaceutical.get("spid"));
+		result.set("dw", pharmaceutical.get("dw"));
+		result.set("jlgg", pharmaceutical.get("jlgg"));
+		result.set("jlgg", pharmaceutical.get("jlgg"));
+		result.set("baozhshl",0);
+		result.set("lingsshl", 0);
+		result.set("shl",sl);
+		result.set("dj", 0);
+		result.set("hshj", 0);
+		result.set("koul", pharmaceutical.get("koul"));
+		result.set("je", 0);
+		result.set("hsje", 0);
+		result.set("lshj", 0);
+		result.set("lshje", 0);
+		result.set("yiwchsl", sl);
+		result.set("zengp", "否");
+		result.set("shengccj", pharmaceutical.get("shengccj"));
+		return result;
+	}
+}
+

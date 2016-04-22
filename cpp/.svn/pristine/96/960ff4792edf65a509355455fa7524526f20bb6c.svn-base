@@ -1,0 +1,89 @@
+package com.cpp.order;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import com.cpp.common.MyInterceptor;
+import com.cpp.common.Utility;
+import com.cpp.login.User;
+import com.jfinal.aop.Before;
+import com.jfinal.core.Controller;
+import com.jfinal.plugin.activerecord.Db;
+import com.jfinal.plugin.ehcache.CacheKit;
+
+/**
+ * OrderController
+ * 所有 sql 与业务逻辑写在 Model 或 Service 中，不要写在 Controller 中，养成好习惯，有利于大型项目的开发与维护
+ */
+@Before(MyInterceptor.class)
+public class OrderController extends Controller {
+	private OrderSearch sqlPara = new OrderSearch();
+
+	public void index() {
+		String sqlCondition = " 1=1";
+        Map<String,String[]> paraMap = getParaMap();
+        if(paraMap.size() == 0){
+        	paraMap = new  HashMap<String,String[]>() ;
+            //根据当前登录用户查询单位编码
+    		User loginUser = CacheKit.get("UserCachingFilter", "user");
+    		   if (loginUser != null ) {
+    		       setAttr("headerUserName", loginUser.get("NAME"));
+    		   }
+            String[] dwbh = { "DWI00000026"};
+            
+      //      paraMap.put("orderSearch.dwbh", dwbh);
+        }else{
+        	if(0 !=paraMap.get("ksrq").length){
+        		sqlCondition += "and rq > '"+   paraMap.get("ksrq")[0]+"'";
+        		setAttr("ksrq", paraMap.get("ksrq")[0]);
+        	}
+        	if(0 !=paraMap.get("jsrq").length){
+        		sqlCondition += "and rq < '"+   paraMap.get("jsrq")[0]+"'";
+        		setAttr("jsrq", paraMap.get("jsrq")[0]);
+        	}
+        	if(0 !=paraMap.get("orderSearch.djbh").length){
+        		setAttr("orderSearch.djbh", paraMap.get("orderSearch.djbh")[0]);
+        	}
+        }
+
+        if(paraMap.size() == 0){
+            setAttr("orderPage", Order.me.paginate(getParaToInt(0, 1), 20,"",""));
+        }else{
+            String[] paraStr = Utility.makePara(sqlPara, "orderSearch", paraMap);
+            sqlCondition += paraStr[0];
+            setAttr("orderPage", Order.me.paginate(getParaToInt(0, 1), 20, "select *", "from jxddhz where" + sqlCondition + " order by djbh"));
+            setAttr("searchCon", paraStr[1]);
+        }
+    	render("order.jsp");
+
+	}
+	
+	public void add() {
+	}
+	
+	@Before(OrderValidator.class)
+	public void save() {
+		getModel(Order.class).save();
+		redirect("/order");
+	}
+	
+	public void edit() {
+		setAttr("order", Order.me.findById(getParaToInt()));
+	}
+	
+	@Before(OrderValidator.class)
+	public void update() {
+		getModel(Order.class).update();
+		redirect("/order");
+	}
+	
+	public void delete() {
+		Db.update("delete from jxddmx where djbh= ?",getPara());
+		Order.me.deleteById(getPara());
+		redirect("/order");
+	}
+	
+	
+}
+
+
